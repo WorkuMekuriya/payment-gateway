@@ -1,43 +1,56 @@
-# EFDA-ETSwitch
+# EFDA Payment Gateway
 
-NestJS microservice for the EthSwitch (NGB) payment gateway.
+NestJS microservice for **EthSwitch (NGB)** and **Telebirr** hosted checkout payments.
 
-**Architecture & EthSwitch integration:** [`docs/architecture.md`](docs/architecture.md)
+## Documentation
 
-## Routes
+| Doc | Description |
+|-----|-------------|
+| [`docs/architecture.md`](docs/architecture.md) | Microservice design, planning, shared platform |
+| [`docs/ethswitch.md`](docs/ethswitch.md) | EthSwitch (NGB) integration |
+| [`docs/telebirr.md`](docs/telebirr.md) | Telebirr H5 C2B integration |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/ethswitch/initiate/:applicationId` | Start or resume hosted payment |
-| `GET` | `/api/ethswitch/cancel` | Payer cancel return → redirect to SPA |
-| `POST` | `/api/ethswitch/callback` | Gateway completion webhook |
-
-## Initiate body
-
-```json
-{
-  "paymentInfoId": 123,
-  "amount": 500.00,
-  "currency": "ETB"
-}
-```
-
-## Payment success webhook
-
-On `PAID` callback the service POSTs to `PAYMENT_SUCCESS_WEBHOOK_URL` with `paymentInfoId`, `applicationId`, `merchOrderId`, and `transId`.
-
-## Setup
+## Quick start
 
 ```bash
 cp .env.example .env
 # edit credentials + DB
 psql -f database/001_init.sql
+psql -f database/002_telebirr.sql
 npm install
 npm run start:dev
 ```
 
-Swagger UI is available in non-production environments at `http://localhost:3100/api/docs` (`NODE_ENV` must not be `production`).
+Swagger (dev): `http://localhost:3100/api/docs`
 
-## Config
+## API summary
 
-See `.env.example` and [`docs/architecture.md`](docs/architecture.md#6-configuration).
+**EthSwitch** — [`docs/ethswitch.md`](docs/ethswitch.md)
+
+| Method | Path |
+|--------|------|
+| `POST` | `/api/ethswitch/initiate/:applicationId` |
+| `GET` | `/api/ethswitch/cancel` |
+| `POST` | `/api/ethswitch/callback` |
+
+**Telebirr** — [`docs/telebirr.md`](docs/telebirr.md)
+
+| Method | Path |
+|--------|------|
+| `POST` | `/api/telebirr/initiate/:applicationId` |
+| `POST` | `/api/telebirr/callback` |
+| `POST` | `/api/telebirr/redirect-callback` |
+| `POST` | `/api/telebirr/reconcile/:applicationId` |
+| `GET` | `/api/telebirr/status/:merchOrderId` |
+
+**Initiate body** (all providers):
+
+```json
+{
+  "paymentInfoId": 123,
+  "amount": 1.00,
+  "currency": "ETB"
+}
+```
+
+On successful payment the service POSTs to `PAYMENT_SUCCESS_WEBHOOK_URL` with `provider` set to `ETHSWITCH` or `TELEBIRR`.

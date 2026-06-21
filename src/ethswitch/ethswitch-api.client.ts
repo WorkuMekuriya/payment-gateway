@@ -12,7 +12,7 @@ import {
   OrderRequestDto,
   OrderResponseDto,
 } from './dto/ethswitch.dto';
-import { toSnakeCaseKeys } from './utils/snake-case';
+import { toSnakeCaseKeys } from '../common/utils/snake-case';
 import { normalizeOrderResponse } from './utils/normalize-gateway-response';
 import { EthSwitchTokenCache } from './token-cache.service';
 

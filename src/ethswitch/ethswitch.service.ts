@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosError } from 'axios';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { PaymentWebhookService } from '../common/payment-webhook.service';
 import ethswitchConfig from '../config/ethswitch.config';
 import {
   EthSwitchCallbackStatus,
@@ -13,19 +14,14 @@ import {
 import {
   CallbackPayloadDto,
   EthSwitchPaymentResultDto,
-  InitiatePaymentDto,
   OrderRequestDto,
 } from './dto/ethswitch.dto';
+import { InitiatePaymentDto } from '../common/dto/payment.dto';
 import { EthSwitchApiLog } from './entities/ethswitch-api-log.entity';
 import { EthSwitchTransaction } from './entities/ethswitch-transaction.entity';
 import { EthSwitchApiClient } from './ethswitch-api.client';
-import { PaymentWebhookService } from './payment-webhook.service';
 import { EthSwitchTokenCache } from './token-cache.service';
 
-/**
- * Port of FL.Services.Payment.EthSwitch.EthSwitchService.
- * PaymentInfo / Application status updates are delegated to the monolith webhook.
- */
 @Injectable()
 export class EthSwitchService {
   private readonly logger = new Logger(EthSwitchService.name);
@@ -264,6 +260,7 @@ export class EthSwitchService {
         paymentInfoId: tx.paymentInfoId,
         applicationId: tx.applicationId,
         merchOrderId: tx.merchOrderId,
+        provider: 'ETHSWITCH',
         transId: tx.transId ?? undefined,
       });
     }

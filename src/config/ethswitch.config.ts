@@ -10,8 +10,6 @@ export interface EthSwitchConfig {
   cancelUrl: string;
   notifyUrl: string;
   timeoutExpress: string;
-  paymentSuccessWebhookUrl: string;
-  serviceApiKey: string;
 }
 
 export default registerAs(
@@ -21,12 +19,10 @@ export default registerAs(
     username: (process.env.ETHSWITCH_USERNAME ?? '').trim(),
     password: (process.env.ETHSWITCH_PASSWORD ?? '').trim(),
     billerBin: (process.env.ETHSWITCH_BILLER_BIN ?? '').trim(),
-    currency: process.env.ETHSWITCH_CURRENCY ?? 'ETB',
-    frontendBaseUrl: process.env.ETHSWITCH_FRONTEND_BASE_URL ?? '',
-    cancelUrl: process.env.ETHSWITCH_CANCEL_URL ?? '',
-    notifyUrl: process.env.ETHSWITCH_NOTIFY_URL ?? '',
-    timeoutExpress: process.env.ETHSWITCH_TIMEOUT_EXPRESS ?? '120m',
-    paymentSuccessWebhookUrl: process.env.PAYMENT_SUCCESS_WEBHOOK_URL ?? '',
-    serviceApiKey: process.env.SERVICE_API_KEY ?? '',
+    currency: process.env.ETHSWITCH_CURRENCY?.trim() || 'ETB',
+    frontendBaseUrl: (process.env.ETHSWITCH_FRONTEND_BASE_URL ?? '').trim(),
+    cancelUrl: (process.env.ETHSWITCH_CANCEL_URL ?? '').trim(),
+    notifyUrl: (process.env.ETHSWITCH_NOTIFY_URL ?? '').trim(),
+    timeoutExpress: process.env.ETHSWITCH_TIMEOUT_EXPRESS?.trim() || '120m',
   }),
 );

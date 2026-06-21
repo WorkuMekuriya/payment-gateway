@@ -1,4 +1,4 @@
-/** Converts camelCase keys to snake_case for the NGB gateway (Newtonsoft SnakeCaseNamingStrategy). */
+/** Converts camelCase keys to snake_case for gateway JSON bodies. */
 export function toSnakeCaseKeys(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map(toSnakeCaseKeys);

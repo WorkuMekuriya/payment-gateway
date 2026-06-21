@@ -14,34 +14,25 @@ export function setupSwagger(app: INestApplication): void {
     '(set SERVICE_API_KEY in .env — guard is open when empty)';
 
   const config = new DocumentBuilder()
-    .setTitle('EFDA-ETSwitch')
+    .setTitle('EFDA Payment Gateway')
     .setDescription(
       [
-        'EthSwitch (NGB) payment gateway microservice — hosted payment page flow for application fees.',
+        'EthSwitch (NGB) and Telebirr payment gateway microservice.',
         '',
-        '**Service API key** (`POST /initiate` only):',
-        `- Header \`x-api-key: ${devKeyHint}\``,
-        '- Or `Authorization: Bearer <SERVICE_API_KEY>`',
+        '**Service API key** (initiate, reconcile, status):',
+        `- \`Authorization: Bearer ${devKeyHint}\``,
+        '- Or header `x-api-key` (same value)',
         '',
-        'In Swagger UI click **Authorize**, enter the key under **service-api-key** (apiKey), then try initiate.',
+        'Click **Authorize** once and enter `SERVICE_API_KEY` as the Bearer token — all protected endpoints inherit it.',
       ].join('\n'),
     )
     .setVersion('1.0')
-    .addApiKey(
-      {
-        type: 'apiKey',
-        name: 'x-api-key',
-        in: 'header',
-        description: `SERVICE_API_KEY env value. Dev default: dev-efda-etswitch-local-key`,
-      },
-      'service-api-key',
-    )
     .addBearerAuth(
       {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'API Key',
-        description: 'Same value as SERVICE_API_KEY (alternative to x-api-key)',
+        description: `SERVICE_API_KEY from .env (e.g. ${devKeyHint})`,
       },
       'bearer-service-key',
     )

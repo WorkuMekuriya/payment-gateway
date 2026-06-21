@@ -1,24 +1,23 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import { Inject } from '@nestjs/common';
 import { Request } from 'express';
-import ethswitchConfig from '../../config/ethswitch.config';
+import paymentConfig from '../../config/payment.config';
 
-/** Optional API-key guard for initiate (replaces RequireApplicantRights at the BFF/monolith layer). */
 @Injectable()
 export class ServiceApiKeyGuard implements CanActivate {
   constructor(
-    @Inject(ethswitchConfig.KEY)
-    private readonly config: ConfigType<typeof ethswitchConfig>,
+    @Inject(paymentConfig.KEY)
+    private readonly config: ConfigType<typeof paymentConfig>,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const expected = this.config.serviceApiKey?.trim();
+    const expected = this.config.serviceApiKey;
     if (!expected) return true;
 
     const req = context.switchToHttp().getRequest<Request>();

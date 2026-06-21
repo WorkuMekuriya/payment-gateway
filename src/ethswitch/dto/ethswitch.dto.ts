@@ -1,33 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsInt,
-  IsNumber,
-  IsOptional,
-  IsPositive,
-  IsString,
-  Min,
-} from 'class-validator';
-
-/** Body for initiate — replaces monolith PaymentInfo DB lookup. */
-export class InitiatePaymentDto {
-  @ApiProperty({
-    example: 123,
-    description: 'facility.payment_info.id from the monolith',
-  })
-  @IsInt()
-  @IsPositive()
-  paymentInfoId: number;
-
-  @ApiProperty({ example: 500.0, description: 'Application fee amount in ETB' })
-  @IsNumber()
-  @Min(0.01)
-  amount: number;
-
-  @ApiPropertyOptional({ example: 'ETB', default: 'ETB' })
-  @IsOptional()
-  @IsString()
-  currency?: string;
-}
 
 export class LoginRequestDto {
   username: string;
@@ -143,7 +114,7 @@ export class EthSwitchPaymentResultDto {
   @ApiPropertyOptional()
   applicationId?: number;
 
-  @ApiPropertyOptional({ example: '500.00' })
+  @ApiPropertyOptional({ example: '1.00' })
   amount?: string;
 
   @ApiPropertyOptional({
@@ -154,30 +125,4 @@ export class EthSwitchPaymentResultDto {
   static failure(code: string, message: string): EthSwitchPaymentResultDto {
     return { success: false, errorCode: code, errorMessage: message };
   }
-}
-
-export class ApiResponseDto<T = unknown> {
-  @ApiProperty()
-  success: boolean;
-
-  @ApiProperty()
-  message: string;
-
-  @ApiPropertyOptional({ type: EthSwitchPaymentResultDto })
-  data?: T;
-
-  static success<T>(message: string, data?: T): ApiResponseDto<T> {
-    return { success: true, message, data };
-  }
-
-  static error(message: string): ApiResponseDto {
-    return { success: false, message };
-  }
-}
-
-export class PaymentSuccessWebhookDto {
-  paymentInfoId: number;
-  applicationId: number;
-  merchOrderId: string;
-  transId?: string;
 }

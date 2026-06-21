@@ -28,10 +28,18 @@ async function bootstrap() {
     console.log(`Swagger UI: http://localhost:${port}/api/docs`);
     const apiKey = process.env.SERVICE_API_KEY?.trim();
     if (apiKey) {
-      console.log('Initiate auth: x-api-key (see SERVICE_API_KEY in .env)');
+      console.log('Initiate auth: Authorization Bearer (see SERVICE_API_KEY in .env)');
     } else {
       console.warn(
         'SERVICE_API_KEY is empty — initiate endpoint accepts unauthenticated calls',
+      );
+    }
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.TELEBIRR_ALLOW_INSECURE_TLS === 'true'
+    ) {
+      console.warn(
+        'TELEBIRR_ALLOW_INSECURE_TLS=true — TLS verification disabled for Telebirr API (dev sandbox only)',
       );
     }
   }

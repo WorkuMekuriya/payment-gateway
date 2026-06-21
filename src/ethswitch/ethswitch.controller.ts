@@ -15,26 +15,19 @@ import {
   ApiBody,
   ApiBearerAuth,
   ApiExcludeEndpoint,
-  ApiHeader,
   ApiOperation,
   ApiParam,
   ApiResponse,
-  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  ApiResponseDto,
-  CallbackPayloadDto,
-  EthSwitchPaymentResultDto,
-  InitiatePaymentDto,
-} from './dto/ethswitch.dto';
+import { ApiResponseDto, InitiatePaymentDto } from '../common/dto/payment.dto';
+import { ServiceApiKeyGuard } from '../common/guards/service-api-key.guard';
+import { CallbackPayloadDto } from './dto/ethswitch.dto';
 import { EthSwitchService } from './ethswitch.service';
-import { ServiceApiKeyGuard } from './guards/service-api-key.guard';
 
-/** Port of FL.API.Controllers.Payment.EthSwitchController */
 @ApiTags('EthSwitch')
 @Controller('api/ethswitch')
 export class EthSwitchController {
@@ -45,13 +38,7 @@ export class EthSwitchController {
   @Post('initiate/:applicationId')
   @UseGuards(ServiceApiKeyGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiSecurity('service-api-key')
   @ApiBearerAuth('bearer-service-key')
-  @ApiHeader({
-    name: 'x-api-key',
-    description: 'SERVICE_API_KEY from environment',
-    required: true,
-  })
   @ApiOperation({
     summary: 'Initiate or resume a hosted EthSwitch payment',
     description:

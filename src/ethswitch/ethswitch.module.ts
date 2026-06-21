@@ -6,8 +6,6 @@ import { EthSwitchTransaction } from './entities/ethswitch-transaction.entity';
 import { EthSwitchApiClient } from './ethswitch-api.client';
 import { EthSwitchController } from './ethswitch.controller';
 import { EthSwitchService } from './ethswitch.service';
-import { ServiceApiKeyGuard } from './guards/service-api-key.guard';
-import { PaymentWebhookService } from './payment-webhook.service';
 import { EthSwitchTokenCache } from './token-cache.service';
 
 @Module({
@@ -16,12 +14,6 @@ import { EthSwitchTokenCache } from './token-cache.service';
     TypeOrmModule.forFeature([EthSwitchTransaction, EthSwitchApiLog]),
   ],
   controllers: [EthSwitchController],
-  providers: [
-    EthSwitchService,
-    EthSwitchApiClient,
-    EthSwitchTokenCache,
-    PaymentWebhookService,
-    ServiceApiKeyGuard,
-  ],
+  providers: [EthSwitchService, EthSwitchApiClient, EthSwitchTokenCache],
 })
 export class EthSwitchModule {}
