@@ -17,6 +17,7 @@ import {
   OrderRequestDto,
 } from './dto/ethswitch.dto';
 import { InitiatePaymentDto } from '../common/dto/payment.dto';
+import { EthSwitchCallbackService } from '../payments/services/ethswitch-callback.service';
 import { EthSwitchApiLog } from './entities/ethswitch-api-log.entity';
 import { EthSwitchTransaction } from './entities/ethswitch-transaction.entity';
 import { EthSwitchApiClient } from './ethswitch-api.client';
@@ -36,6 +37,7 @@ export class EthSwitchService {
     private readonly logRepo: Repository<EthSwitchApiLog>,
     private readonly tokenCache: EthSwitchTokenCache,
     private readonly webhook: PaymentWebhookService,
+    private readonly ethSwitchCallbackService: EthSwitchCallbackService,
   ) {}
 
   async initiatePayment(
@@ -153,6 +155,7 @@ export class EthSwitchService {
         expiresAt: response.expiresAt ? new Date(response.expiresAt) : null,
       });
       await this.txRepo.save(tx);
+      await this.ethSwitchCallbackService.ensurePaymentRecord(tx);
 
       this.logger.log(
         `EthSwitch payment initiated: AppId=${applicationId}, MerchOrderId=${merchOrderId}, Amount=${amount}, TxId=${tx.id}`,

@@ -10,6 +10,14 @@ export interface EthSwitchConfig {
   cancelUrl: string;
   notifyUrl: string;
   timeoutExpress: string;
+  /** HMAC secret for callback signature verification (x-ethswitch-signature). */
+  callbackSecret: string;
+  /** Comma-separated source IPs allowed to POST callbacks. */
+  allowedIps: string[];
+  /** HTTP Basic Auth username for callback endpoint. */
+  callbackUsername: string;
+  /** HTTP Basic Auth password for callback endpoint. */
+  callbackPassword: string;
 }
 
 export default registerAs(
@@ -24,5 +32,16 @@ export default registerAs(
     cancelUrl: (process.env.ETHSWITCH_CANCEL_URL ?? '').trim(),
     notifyUrl: (process.env.ETHSWITCH_NOTIFY_URL ?? '').trim(),
     timeoutExpress: process.env.ETHSWITCH_TIMEOUT_EXPRESS?.trim() || '120m',
+    callbackSecret: (process.env.ETHSWITCH_CALLBACK_SECRET ?? '').trim(),
+    allowedIps: (process.env.ETHSWITCH_ALLOWED_IPS ?? '')
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean),
+    callbackUsername: (
+      process.env.ETHSWITCH_CALLBACK_USERNAME ?? ''
+    ).trim(),
+    callbackPassword: (
+      process.env.ETHSWITCH_CALLBACK_PASSWORD ?? ''
+    ).trim(),
   }),
 );

@@ -10,6 +10,9 @@ import telebirrConfig from './config/telebirr.config';
 import { EthSwitchModule } from './ethswitch/ethswitch.module';
 import { EthSwitchApiLog } from './ethswitch/entities/ethswitch-api-log.entity';
 import { EthSwitchTransaction } from './ethswitch/entities/ethswitch-transaction.entity';
+import { PaymentCallbackLog } from './payments/entities/payment-callback-log.entity';
+import { Payment } from './payments/entities/payment.entity';
+import { PaymentsModule } from './payments/payments.module';
 import { TelebirrModule } from './telebirr/telebirr.module';
 import { TelebirrApiLog } from './telebirr/entities/telebirr-api-log.entity';
 import { TelebirrTransaction } from './telebirr/entities/telebirr-transaction.entity';
@@ -37,10 +40,13 @@ import { TelebirrTransaction } from './telebirr/entities/telebirr-transaction.en
           EthSwitchApiLog,
           TelebirrTransaction,
           TelebirrApiLog,
+          Payment,
+          PaymentCallbackLog,
         ],
         synchronize: false,
       }),
     }),
+    PaymentsModule,
     EthSwitchModule,
     TelebirrModule,
   ],

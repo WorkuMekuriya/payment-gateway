@@ -5,6 +5,7 @@ How this **NestJS microservice** was designed, what it owns, and how payment pro
 | Document | Contents |
 |----------|----------|
 | **This file** | Service boundaries, structure, shared platform, extension plan |
+| [`payments-callback.md`](payments-callback.md) | Production callback endpoints, verification, idempotency, events |
 | [`ethswitch.md`](ethswitch.md) | EthSwitch (NGB) hosted payment page integration |
 | [`telebirr.md`](telebirr.md) | Telebirr H5 C2B hosted checkout integration |
 
@@ -38,7 +39,7 @@ It does **not** own:
 | **Thin integration contract** | Callers pass `{ paymentInfoId, amount, currency? }` on initiate |
 | **Auditability** | Every inbound/outbound gateway call is logged per provider |
 | **Safe retries** | Unique `merch_order_id`, idempotent callbacks, resume live checkout URLs |
-| **Observable dev experience** | Swagger in non-production, structured logs |
+| **Observable dev experience** | Swagger when `NODE_ENV=development`, structured logs |
 
 ---
 
@@ -53,6 +54,7 @@ flowchart TB
   subgraph MS["EFDA Payment Gateway"]
     direction TB
     Common[CommonModule<br/>webhook · API key guard]
+    Pay[PaymentsModule<br/>callbacks · Payment entity]
     ES[EthSwitchModule]
     TB[TelebirrModule]
     DB[(PostgreSQL payment schema)]
@@ -67,11 +69,13 @@ flowchart TB
   BE -->|initiate + API key| TB
   ES --> NGB
   TB --> TBR
-  NGB -->|callback| ES
+  NGB -->|callback| Pay
   TBR -->|callback| TB
   ES --> DB
   TB --> DB
-  ES --> Common
+  Pay --> DB
+  ES --> Pay
+  Pay --> Common
   TB --> Common
   Common -->|payment success| BE
 ```
@@ -91,11 +95,13 @@ flowchart TB
 
 ```
 efda-payment-gateway/
-  database/
-    001_init.sql          # EthSwitch tables
+  src/database/
+    001_etswitch.sql      # EthSwitch transaction table
     002_telebirr.sql      # Telebirr tables
+    003_payments.sql      # Canonical payment + callback audit log
   docs/
     architecture.md       # this file
+    payments-callback.md  # callback endpoints, verification, events
     ethswitch.md
     telebirr.md
   src/
@@ -113,6 +119,7 @@ efda-payment-gateway/
       dto/payment.dto.ts  # InitiatePaymentDto, ApiResponseDto
       utils/snake-case.ts
     ethswitch/            # → see docs/ethswitch.md
+    payments/             # → see docs/payments-callback.md
     telebirr/             # → see docs/telebirr.md
 ```
 
@@ -141,7 +148,7 @@ Adding a third provider = new folder + config + migration + `AppModule` import. 
 
 - Custom JSON parser preserving **raw body** (callback deserialization)
 - Global `ValidationPipe` (whitelist + transform)
-- Swagger at `/api/docs` when `NODE_ENV !== production`
+- Swagger at `/api/docs` when `NODE_ENV=development`
 - Default port `3100`
 
 ### Root module (`app.module.ts`)
@@ -153,7 +160,8 @@ Adding a third provider = new folder + config + migration + `AppModule` import. 
 | `CommonModule` | Global webhook + API key guard |
 | `ThrottlerModule` | 10 requests/min on sensitive endpoints |
 | `TypeOrmModule` | PostgreSQL, `payment` schema entities |
-| `EthSwitchModule` | EthSwitch feature |
+| `PaymentsModule` | EthSwitch callback, `Payment` entity, event publisher |
+| `EthSwitchModule` | EthSwitch initiate and cancel |
 | `TelebirrModule` | Telebirr feature |
 
 ### Shared initiate contract
@@ -187,7 +195,7 @@ Success responses wrap provider-specific data in the standard envelope:
 
 ### Payment-success webhook
 
-`PaymentWebhookService` POSTs to `PAYMENT_SUCCESS_WEBHOOK_URL`:
+`PaymentWebhookService` POSTs to `PAYMENT_SUCCESS_WEBHOOK_URL` (via `HttpPaymentEventPublisher`):
 
 ```json
 {
@@ -199,7 +207,7 @@ Success responses wrap provider-specific data in the standard envelope:
 }
 ```
 
-`provider` is `ETHSWITCH` or `TELEBIRR` so the caller can route internally.
+`provider` is `ETHSWITCH`, `TELEBIRR`, so the caller can route internally. See [`payments-callback.md`](payments-callback.md) for the injectable `IPaymentEventPublisher` interface.
 
 ---
 
@@ -208,11 +216,11 @@ Success responses wrap provider-specific data in the standard envelope:
 | Concern | Approach |
 |---------|----------|
 | **Initiate endpoints** | Optional `SERVICE_API_KEY` via `x-api-key` or `Authorization: Bearer` |
-| **EthSwitch callback** | No signature; order id + amount/currency match |
+| **EthSwitch callback** | HMAC signature, Basic Auth, and/or IP allowlist — see [`payments-callback.md`](payments-callback.md) |
 | **Telebirr callback** | RSA signature verification (PSS / PKCS#1 variants on redirect) |
 | **Public URLs** | `*_NOTIFY_URL`, `*_CANCEL_URL` must be reachable by providers (use ngrok in local dev) |
 | **Secrets** | `.env` locally; vault/CI in production — never commit PEMs or passwords |
-| **Swagger** | Disabled when `NODE_ENV=production` |
+| **Swagger** | Enabled when `NODE_ENV=development` only |
 
 When `SERVICE_API_KEY` is empty, initiate is unauthenticated (local development only).
 
@@ -220,12 +228,14 @@ When `SERVICE_API_KEY` is empty, initiate is unauthenticated (local development 
 
 ## 6. Data architecture
 
-Single PostgreSQL database, schema **`payment`**, **one transaction table + one api_log table per provider**.
+Single PostgreSQL database, schema **`payment`**.
 
 | Table | Provider | Purpose |
 |-------|----------|---------|
+| `payment` | All | Canonical payment record (status, amount, callback payload) |
+| `payment_callback_log` | All | Per-request callback audit (headers, body, IP, result) |
 | `ethswitch_transaction` | EthSwitch | One row per HPP attempt |
-| `ethswitch_api_log` | EthSwitch | Inbound/outbound audit |
+| `ethswitch_api_log` | EthSwitch | Outbound gateway audit |
 | `telebirr_transaction` | Telebirr | One row per checkout attempt |
 | `telebirr_api_log` | Telebirr | Inbound/outbound audit (+ `signature_valid`) |
 
@@ -239,7 +249,7 @@ Common columns across transaction tables:
 
 `payment_info_id` is **not** a foreign key to the caller’s database — this service stays decoupled.
 
-Migrations are plain SQL files run manually (`database/001_init.sql`, `002_telebirr.sql`). TypeORM `synchronize` is **off**.
+Migrations are plain SQL files run manually (`src/database/001_etswitch.sql`, `002_telebirr.sql`, `003_payments.sql`). TypeORM `synchronize` is **off**.
 
 ---
 
@@ -263,7 +273,7 @@ Shared (`.env`):
 | Variable | Purpose |
 |----------|---------|
 | `PORT` | Listen port (default `3100`) |
-| `NODE_ENV` | `production` disables Swagger |
+| `NODE_ENV` | `development` enables Swagger at `/api/docs` |
 | `DATABASE_*` | PostgreSQL connection |
 | `SERVICE_API_KEY` | Initiate / reconcile auth |
 | `PAYMENT_SUCCESS_WEBHOOK_URL` | Caller webhook on success |
@@ -283,7 +293,7 @@ Full template: `.env.example`
 |-------|----------|
 | **Local dev** | Providers cannot POST to `localhost` — tunnel `*_NOTIFY_URL` with ngrok |
 | **Idempotency** | Safe to retry initiate; duplicate callbacks are ignored when terminal |
-| **Disputes** | Use `*_api_log` + transaction `raw_callback` / status fields |
+| **Disputes** | Use `payment_callback_log`, `*_api_log`, and `callback_payload` on `payment` |
 | **Production** | `NODE_ENV=production`, strong `SERVICE_API_KEY`, secrets outside git |
 | **Swagger** | `http://localhost:3100/api/docs` — authorize with `SERVICE_API_KEY` |
 | **Health** | Process listens on `PORT`; DB connectivity required for initiate |
@@ -295,9 +305,10 @@ Full template: `.env.example`
 ### Implemented
 
 - [x] EthSwitch (NGB) hosted payment page — [`ethswitch.md`](ethswitch.md)
+- [x] Production EthSwitch callback (`/api/v1/payments/ethswitch/callback`) — [`payments-callback.md`](payments-callback.md)
 - [x] Telebirr H5 C2B hosted checkout — [`telebirr.md`](telebirr.md)
 - [x] Shared webhook with `provider` discriminator
-- [x] Per-provider audit logs
+- [x] Per-provider audit logs + canonical `payment` table
 
 ### Planned (optional)
 
@@ -310,18 +321,20 @@ Full template: `.env.example`
 ### Adding a new provider — checklist
 
 1. Create `src/{provider}/` using the module pattern in §3
-2. Add `config/{provider}.config.ts` and `.env.example` entries
-3. Add `database/00N_{provider}.sql`
-4. Register entities in `app.module.ts` TypeORM config
-5. Import `{Provider}Module` in `AppModule`
-6. Write `docs/{provider}.md`
-7. Point caller’s pay route at `POST /api/{provider}/initiate/:applicationId`
-8. Register public callback URLs with the provider
+2. Add callback handler under `src/payments/` — see [`payments-callback.md` § Adding a new provider](payments-callback.md#adding-a-new-provider-callback)
+3. Add `config/{provider}.config.ts` and `.env.example` entries
+4. Add `src/database/00N_{provider}.sql`
+5. Register entities in `app.module.ts` TypeORM config
+6. Import `{Provider}Module` in `AppModule`
+7. Write `docs/{provider}.md`
+8. Point caller's pay route at `POST /api/{provider}/initiate/:applicationId`
+9. Register public callback URL with the provider (`/api/v1/payments/{provider}/callback`)
 
 ---
 
 ## 11. Related documents
 
+- [`payments-callback.md`](payments-callback.md) — callback endpoints, verification, idempotency, events
 - [`ethswitch.md`](ethswitch.md) — NGB API, HPP flow, callbacks, env vars
 - [`telebirr.md`](telebirr.md) — fabric token, signing, reconcile, env vars
 - [`../README.md`](../README.md) — quick start

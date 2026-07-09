@@ -2,17 +2,14 @@ import {
   Body,
   Controller,
   Get,
-  Logger,
   Param,
   ParseIntPipe,
   Post,
   Query,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiBody,
   ApiBearerAuth,
   ApiExcludeEndpoint,
   ApiOperation,
@@ -21,18 +18,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import type { Response } from 'express';
 import { ApiResponseDto, InitiatePaymentDto } from '../common/dto/payment.dto';
 import { ServiceApiKeyGuard } from '../common/guards/service-api-key.guard';
-import { CallbackPayloadDto } from './dto/ethswitch.dto';
 import { EthSwitchService } from './ethswitch.service';
 
 @ApiTags('EthSwitch')
 @Controller('api/ethswitch')
 export class EthSwitchController {
-  private readonly logger = new Logger(EthSwitchController.name);
-
   constructor(private readonly ethSwitchService: EthSwitchService) {}
 
   @Post('initiate/:applicationId')
@@ -77,67 +70,5 @@ export class EthSwitchController {
     res.redirect(
       this.ethSwitchService.buildApplicationDetailUrl(applicationId),
     );
-  }
-
-  @Post('callback')
-  @ApiOperation({
-    summary: 'EthSwitch gateway completion callback',
-    description:
-      'Called by the NGB gateway on payment completion. Always returns `{ code: "SUCCESS" }`.',
-  })
-  @ApiBody({ type: CallbackPayloadDto })
-  @ApiResponse({
-    status: 200,
-    schema: { example: { code: 'SUCCESS' } },
-  })
-  async callback(
-    @Req() req: Request & { rawBody?: Buffer },
-  ): Promise<{ code: string }> {
-    const started = Date.now();
-    const rawBody =
-      req.rawBody?.toString('utf8') ??
-      (typeof req.body === 'string'
-        ? req.body
-        : req.body && Object.keys(req.body).length
-          ? JSON.stringify(req.body)
-          : '');
-
-    let payload: CallbackPayloadDto | null = null;
-    let deserializationError: string | null = null;
-
-    try {
-      payload = rawBody?.trim()
-        ? (JSON.parse(rawBody) as CallbackPayloadDto)
-        : null;
-    } catch (err) {
-      deserializationError = `JSON deserialization failed: ${err instanceof Error ? err.message : String(err)}`;
-      this.logger.warn(
-        `EthSwitch callback body could not be deserialized. Raw length=${rawBody?.length ?? 0}.`,
-      );
-    }
-
-    const correlationId =
-      (req.headers['x-correlation-id'] as string | undefined) ??
-      payload?.correlation_id ??
-      uuidv4().replace(/-/g, '');
-
-    await this.ethSwitchService.logInbound(
-      'callback',
-      payload?.data?.request_id,
-      correlationId,
-      payload ?? { rawBody, error: deserializationError },
-      Date.now() - started,
-      deserializationError,
-    );
-
-    if (payload) {
-      await this.ethSwitchService.processCallback(payload);
-    }
-
-    this.logger.log(
-      `EthSwitch callback received for ${payload?.data?.request_id}: status=${payload?.status}, duration=${Date.now() - started}ms`,
-    );
-
-    return { code: 'SUCCESS' };
   }
 }

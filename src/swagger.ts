@@ -1,9 +1,9 @@
 import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
-/** Enabled when NODE_ENV is not production (development, local, test, etc.). */
+/** Enabled only when NODE_ENV is `development`. */
 export function isSwaggerEnabled(): boolean {
-  return process.env.NODE_ENV !== 'production';
+  return process.env.NODE_ENV?.trim().toLowerCase() === 'development';
 }
 
 export function setupSwagger(app: INestApplication): void {

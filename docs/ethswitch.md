@@ -2,7 +2,7 @@
 
 Hosted Payment Page (HPP) integration for **EthSwitch NGB** in the EFDA Payment Gateway microservice.
 
-← Back to [`architecture.md`](architecture.md)
+← Back to [`architecture.md`](architecture.md) · Callback details: [`payments-callback.md`](payments-callback.md)
 
 Official API reference: [NBG API sandbox](https://ethswitch.github.io/ngb-api-sandbox/)
 
@@ -15,10 +15,10 @@ EthSwitch uses a **redirect-based hosted checkout**:
 1. Caller requests initiate → service registers an HPP order with NGB
 2. Service returns `checkoutUrl` (`hpp_url`)
 3. Payer pays on EthSwitch’s hosted page
-4. NGB POSTs completion to our callback URL
+4. NGB POSTs completion to our callback URL (`/api/v1/payments/ethswitch/callback`)
 5. On `PAID`, we notify the caller via `PAYMENT_SUCCESS_WEBHOOK_URL`
 
-There is **no cryptographic signature** on callbacks. Trust is established by matching `merch_order_id` and amount/currency.
+Callback security is configurable: HMAC signature, HTTP Basic Auth, and/or IP allowlist. When none are configured (local dev), trust falls back to matching `merch_order_id` and amount/currency. See [`payments-callback.md`](payments-callback.md) for full details.
 
 ---
 
@@ -27,7 +27,7 @@ There is **no cryptographic signature** on callbacks. Trust is established by ma
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/ethswitch/initiate/:applicationId` | API key (if set) | Start or resume HPP payment |
-| `POST` | `/api/ethswitch/callback` | None | NGB completion webhook |
+| `POST` | `/api/v1/payments/ethswitch/callback` | Callback verification | NGB completion webhook |
 | `GET` | `/api/ethswitch/cancel` | None | Payer cancel → redirect to SPA |
 
 ### Initiate
@@ -80,7 +80,7 @@ sequenceDiagram
   Caller->>User: Redirect to hpp_url
   User->>NGB: Pay or cancel
   alt PAID
-    NGB->>MS: POST /callback
+    NGB->>MS: POST /api/v1/payments/ethswitch/callback
     MS->>Caller: POST payment-success webhook
     NGB->>User: Redirect success_url
   else Cancelled
@@ -162,10 +162,12 @@ Response fields (gateway uses snake_case; normalized to camelCase in code):
 2. **Resume** — if `PENDING` tx has live `checkout_url` (within `expires_at` or `ETHSWITCH_TIMEOUT_EXPRESS`), return with `isResume: true`
 3. **Stale pending** — mark older rows `TIMEOUT`
 4. **New order** — `merchOrderId` = `FL{applicationId}{12 random hex chars}`
-5. Call `order.create`, persist transaction, return `checkoutUrl`
+5. Call `order.create`, persist transaction, create canonical `payment` row, return `checkoutUrl`
 6. Log outbound to `ethswitch_api_log`
 
-### Callback (`POST /api/ethswitch/callback`)
+### Callback (`POST /api/v1/payments/ethswitch/callback`)
+
+Handled by `EthSwitchCallbackService` in the Payments module. Full reference: [`payments-callback.md`](payments-callback.md).
 
 Key payload fields:
 
@@ -178,10 +180,11 @@ Key payload fields:
 
 Rules:
 
-- Always respond `{ "code": "SUCCESS" }`
-- Idempotent — skip if already `SUCCESS` or `FAIL`
-- On `PAID` with amount mismatch → mark `FAIL`, do not webhook
-- On success → update tx, POST webhook with `provider: "ETHSWITCH"`
+- Returns HTTP `200` on success and duplicate callbacks; `400` / `401` / `500` on errors
+- Idempotent — skip if payment is already in a terminal status (`SUCCESS`, `FAILED`, `CANCELLED`, `EXPIRED`)
+- On `PAID` with amount mismatch → mark `FAILED`, do not webhook
+- On success → update `payment.payment` + `ethswitch_transaction`, publish `PaymentCompleted` event
+- Every request logged to `payment.payment_callback_log` (headers, body, IP, result)
 
 ### Cancel (`GET /api/ethswitch/cancel`)
 
@@ -195,6 +198,8 @@ Browser redirect when payer abandons HPP. Marks `PENDING` → `CANCELLED`, then 
 
 ## Transaction status lifecycle
 
+Provider table (`ethswitch_transaction`):
+
 ```
 PENDING ──► SUCCESS    (callback: PAID)
 PENDING ──► FAIL       (callback: FAILED, or amount mismatch)
@@ -202,13 +207,20 @@ PENDING ──► TIMEOUT    (stale; new initiate creates fresh order)
 PENDING ──► CANCELLED  (payer cancel redirect)
 ```
 
-Terminal states (`SUCCESS`, `FAIL`) ignore duplicate callbacks.
+Canonical `payment.payment` statuses map `FAIL` → `FAILED` and `TIMEOUT` → `EXPIRED`. Terminal states ignore duplicate callbacks.
 
 ---
 
 ## Data model
 
-Migration: `database/001_init.sql`
+Migrations:
+
+- `src/database/001_etswitch.sql` — `ethswitch_transaction`
+- `src/database/003_payments.sql` — `payment`, `payment_callback_log`, `ethswitch_api_log`
+
+### `payment.payment` (canonical)
+
+See [`payments-callback.md` § Data model](payments-callback.md#data-model). One row per payment attempt; updated on callback.
 
 ### `payment.ethswitch_transaction`
 
@@ -225,6 +237,10 @@ Migration: `database/001_init.sql`
 ### `payment.ethswitch_api_log`
 
 Audit trail: direction (`INBOUND` / `OUTBOUND`), method, payloads, HTTP status, duration.
+
+### `payment.payment_callback_log`
+
+Per-callback request audit: headers, raw body, source IP, processing result. See [`payments-callback.md`](payments-callback.md).
 
 ---
 
@@ -243,6 +259,12 @@ src/ethswitch/
     ethswitch-api-log.entity.ts
   constants/statuses.ts
   utils/normalize-gateway-response.ts   # hpp_url → hppUrl
+
+src/payments/                         # → docs/payments-callback.md
+  controllers/ethswitch-callback.controller.ts
+  services/ethswitch-callback.service.ts
+  verifiers/ethswitch-callback.verifier.ts
+  …
 ```
 
 ---
@@ -258,8 +280,12 @@ src/ethswitch/
 | `ETHSWITCH_CURRENCY` | Default currency (`ETB`) |
 | `ETHSWITCH_FRONTEND_BASE_URL` | SPA origin for `success_url` redirect |
 | `ETHSWITCH_CANCEL_URL` | Public cancel endpoint on this service |
-| `ETHSWITCH_NOTIFY_URL` | Public callback endpoint on this service |
+| `ETHSWITCH_NOTIFY_URL` | Public callback URL — use `/api/v1/payments/ethswitch/callback` |
 | `ETHSWITCH_TIMEOUT_EXPRESS` | Pending link window, e.g. `120m` |
+| `ETHSWITCH_CALLBACK_SECRET` | HMAC-SHA256 secret for callback signature verification |
+| `ETHSWITCH_ALLOWED_IPS` | Comma-separated IPs allowed to POST callbacks |
+| `ETHSWITCH_CALLBACK_USERNAME` | HTTP Basic Auth username for callbacks |
+| `ETHSWITCH_CALLBACK_PASSWORD` | HTTP Basic Auth password for callbacks |
 
 ### Sandbox values ([NBG docs](https://ethswitch.github.io/ngb-api-sandbox/))
 
@@ -271,8 +297,10 @@ src/ethswitch/
 
 ### Local development
 
-- Set `ETHSWITCH_NOTIFY_URL` to a **public** URL (ngrok) — NGB cannot reach `localhost`
+- Set `ETHSWITCH_NOTIFY_URL` to the **v1 callback path** on a **public** URL (ngrok) — NGB cannot reach `localhost`
+- Example: `https://abc123.ngrok.io/api/v1/payments/ethswitch/callback`
 - `ETHSWITCH_CANCEL_URL` can be localhost for browser redirects from your machine
+- Callback security env vars are optional in dev; configure at least one in production
 
 ---
 
@@ -282,7 +310,10 @@ src/ethswitch/
 |---------|----------------|
 | `Payment gateway returned an unexpected response` | Gateway returned `hpp_url` missing — check credentials, BIN, or API path |
 | Callback never arrives | `ETHSWITCH_NOTIFY_URL` not publicly reachable |
+| Callback returns `401` | HMAC/Basic Auth/IP verification failed — check `ETHSWITCH_CALLBACK_*` env vars |
+| Callback returns `400` | Missing `data.request_id` or invalid JSON |
 | Initiate works but no webhook | `PAYMENT_SUCCESS_WEBHOOK_URL` unset or caller endpoint down |
 | Duplicate payment attempts | Expected — each new initiate after timeout creates new `merch_order_id`; old pending rows are marked `TIMEOUT` |
+| `relation "payment.payment" does not exist` | Run `src/database/003_payments.sql` |
 
-Inspect `payment.ethswitch_api_log` for raw request/response payloads.
+Inspect `payment.payment_callback_log` and `payment.ethswitch_api_log` for raw request/response payloads.
