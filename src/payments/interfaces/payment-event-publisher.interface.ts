@@ -1,4 +1,5 @@
 import { PaymentProvider } from '../constants/payment-provider.enum';
+import { PaymentMethod } from '../constants/payment-method.enum';
 
 /**
  * Domain event emitted when a payment reaches SUCCESS.
@@ -13,7 +14,7 @@ export interface PaymentCompletedEvent {
   providerTransactionId?: string;
   amount: string;
   currency: string;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
 }
 
 /**

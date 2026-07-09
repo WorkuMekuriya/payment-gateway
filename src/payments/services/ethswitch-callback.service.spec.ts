@@ -5,6 +5,7 @@ import { EthSwitchTransactionStatus } from '../../ethswitch/constants/statuses';
 import { EthSwitchTransaction } from '../../ethswitch/entities/ethswitch-transaction.entity';
 import { PAYMENT_EVENT_PUBLISHER } from '../constants/injection-tokens';
 import { PaymentProvider } from '../constants/payment-provider.enum';
+import { PaymentMethod } from '../constants/payment-method.enum';
 import { PaymentStatus } from '../constants/payment-status.enum';
 import { PaymentCallbackLog } from '../entities/payment-callback-log.entity';
 import { Payment } from '../entities/payment.entity';
@@ -141,7 +142,7 @@ describe('EthSwitchCallbackService', () => {
       amount: '100.00',
       currency: 'ETB',
       paymentStatus: PaymentStatus.SUCCESS,
-      paymentMethod: PaymentProvider.ETHSWITCH,
+      paymentMethod: PaymentMethod.HPP,
       provider: PaymentProvider.ETHSWITCH,
       callbackPayload: '{}',
       callbackReceivedAt: new Date(),
@@ -182,6 +183,7 @@ describe('EthSwitchCallbackService', () => {
       expect.objectContaining({
         transactionReference: merchOrderId,
         provider: PaymentProvider.ETHSWITCH,
+        paymentMethod: PaymentMethod.HPP,
       }),
     );
   });

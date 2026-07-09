@@ -202,7 +202,7 @@ On `SUCCESS`, the service emits a `PaymentCompletedEvent`:
   providerTransactionId?: string;
   amount: string;
   currency: string;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod; // e.g. HPP (EthSwitch hosted payment page)
 }
 ```
 

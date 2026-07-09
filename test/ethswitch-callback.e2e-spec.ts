@@ -10,6 +10,7 @@ import { AppModule } from '../src/app.module';
 import { EthSwitchTransactionStatus } from '../src/ethswitch/constants/statuses';
 import { EthSwitchTransaction } from '../src/ethswitch/entities/ethswitch-transaction.entity';
 import { PaymentProvider } from '../src/payments/constants/payment-provider.enum';
+import { PaymentMethod } from '../src/payments/constants/payment-method.enum';
 import { PaymentStatus } from '../src/payments/constants/payment-status.enum';
 import { Payment } from '../src/payments/entities/payment.entity';
 import { PAYMENT_EVENT_PUBLISHER } from '../src/payments/constants/injection-tokens';
@@ -76,7 +77,7 @@ describe('EthSwitch callback (e2e)', () => {
         amount: '250.00',
         currency: 'ETB',
         paymentStatus: PaymentStatus.PENDING,
-        paymentMethod: PaymentProvider.ETHSWITCH,
+        paymentMethod: PaymentMethod.HPP,
         provider: PaymentProvider.ETHSWITCH,
       }),
     );

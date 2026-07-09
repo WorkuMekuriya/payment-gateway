@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { PaymentProvider } from '../constants/payment-provider.enum';
+import { PaymentMethod } from '../constants/payment-method.enum';
 import { PaymentStatus } from '../constants/payment-status.enum';
 
 /**
@@ -55,7 +56,7 @@ export class Payment {
   paymentStatus: PaymentStatus;
 
   @Column({ name: 'payment_method', type: 'varchar', length: 32 })
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
 
   @Column({ type: 'varchar', length: 32 })
   provider: PaymentProvider;

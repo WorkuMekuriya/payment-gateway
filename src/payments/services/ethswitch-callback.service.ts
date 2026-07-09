@@ -11,6 +11,7 @@ import {
 } from '../../ethswitch/constants/statuses';
 import { EthSwitchTransaction } from '../../ethswitch/entities/ethswitch-transaction.entity';
 import { PAYMENT_EVENT_PUBLISHER } from '../constants/injection-tokens';
+import { PaymentMethod } from '../constants/payment-method.enum';
 import { PaymentProvider } from '../constants/payment-provider.enum';
 import {
   PaymentStatus,
@@ -186,7 +187,7 @@ export class EthSwitchCallbackService {
       amount: tx.totalAmount,
       currency: tx.transCurrency,
       paymentStatus: this.mapEthSwitchTradeStatus(tx.tradeStatus),
-      paymentMethod: PaymentProvider.ETHSWITCH,
+      paymentMethod: PaymentMethod.HPP,
       provider: PaymentProvider.ETHSWITCH,
     });
 
@@ -250,7 +251,7 @@ export class EthSwitchCallbackService {
           amount: ethSwitchTx.totalAmount,
           currency: ethSwitchTx.transCurrency,
           paymentStatus: PaymentStatus.PENDING,
-          paymentMethod: PaymentProvider.ETHSWITCH,
+          paymentMethod: PaymentMethod.HPP,
           provider: PaymentProvider.ETHSWITCH,
         });
 
